@@ -7,9 +7,11 @@ services:
     container_name: nextcloud-aio-mastercontainer
     network_mode: bridge
     ports:
-      - 80:80
-      - 127.0.0.1:8080:8080
-      - 8443:8443
+      - "${AIO_BIND_IP:-127.0.0.1}:${AIO_PORT:-18080}:8080"
+    environment:
+      APACHE_PORT: "${APACHE_PORT:-11000}"
+      APACHE_IP_BINDING: "${APACHE_IP_BINDING:-127.0.0.1}"
+      SKIP_DOMAIN_VALIDATION: "${SKIP_DOMAIN_VALIDATION:-true}"
     volumes:
       - nextcloud_aio_mastercontainer:/mnt/docker-aio-config
       - /var/run/docker.sock:/var/run/docker.sock:ro

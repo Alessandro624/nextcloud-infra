@@ -1,24 +1,26 @@
 # Nextcloud infrastructure
 
-Docker Compose configuration and operating procedures for a self-hosted Nextcloud All-in-One (AIO) installation with a domain and HTTPS. AIO manages Nextcloud, PostgreSQL, Redis, Collabora and its built-in Borg backup service.
+Docker Compose configuration and operating procedures for a self-hosted Nextcloud All-in-One (AIO) installation with private HTTPS access through Tailscale Serve. AIO manages Nextcloud, PostgreSQL, Redis, Collabora and its built-in Borg backup service.
 
 ## Quick start
 
-Read [setup](docs/setup.md) first to configure DNS, certificates and network access.
+Install Docker and Tailscale on the host, sign in to Tailscale, then follow [setup](docs/setup.md). Copy `.env.example` to `.env` to customize ports and bind addresses; start scripts create it if missing.
 
 Linux:
 
 ```bash
 bash scripts/start.sh
+bash scripts/tailscale.sh
 ```
 
 Windows with Docker Desktop and Linux containers:
 
 ```powershell
 ./windows/start.ps1
+./windows/tailscale.ps1
 ```
 
-Open https://localhost:8080 on the Docker host to configure AIO. Enter your actual domain in the wizard and enable Collabora. No `.env` file is required by this Compose configuration.
+Open https://localhost:18080 on the Docker host (or your configured administration port). Enter the hostname printed by Tailscale Serve in the AIO wizard and enable Collabora. Use the Tailscale HTTPS URL for Nextcloud itself. `.env` remains outside Git; `.env.example` is the shared template.
 
 ## Operations
 

@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")/.."
+if [[ ! -f .env ]]; then cp .env.example .env; fi
 docker compose -f compose.yml config --quiet
 docker compose -f compose.yml up -d
-echo 'AIO administration: https://localhost:8080 (unless the host port was changed).'
-echo 'Configure the domain and manage application containers through AIO.'
+echo 'AIO administration binding (open the published host port using HTTPS):'
+docker compose -f compose.yml port nextcloud-aio-mastercontainer 8080
+echo 'Run bash scripts/tailscale.sh, then enter its HTTPS hostname in the AIO wizard.'
