@@ -20,7 +20,7 @@ Windows with Docker Desktop and Linux containers:
 ./windows/tailscale.ps1
 ```
 
-Open https://localhost:18080 on the Docker host (or your configured administration port). Enter the hostname printed by Tailscale Serve in the AIO wizard and enable Collabora. Use the Tailscale HTTPS URL for Nextcloud itself. `.env` remains outside Git; `.env.example` is the shared template.
+Open <https://localhost:18080> on the Docker host (or your configured administration port). Enter the hostname printed by Tailscale Serve in the AIO wizard and enable Collabora. Use the Tailscale HTTPS URL for Nextcloud itself. `.env` remains outside Git; `.env.example` is the shared template.
 
 ## Operations
 

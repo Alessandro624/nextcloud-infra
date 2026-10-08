@@ -54,7 +54,7 @@ Linux:
 bash scripts/start.sh
 ```
 
-Open the printed administration endpoint, https://localhost:18080 by default. Its initial self-signed certificate is expected. Save the AIO password in your password manager.
+Open the printed administration endpoint, <https://localhost:18080> by default. Its initial self-signed certificate is expected. Save the AIO password in your password manager.
 
 If Windows reserves a chosen port, select another free host port in `.env` and rerun start. Port 8080 was unavailable during the initial test on this PC, which is why the default is 18080.
 
