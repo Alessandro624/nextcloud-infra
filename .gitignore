@@ -1,0 +1,16 @@
+.env
+.env.*
+!.env.example
+!*.env.example
+*.secret
+*.key
+rclone.conf
+credentials/
+data/
+backup/
+backups/
+*.log
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
