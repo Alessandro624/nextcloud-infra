@@ -1,0 +1,7 @@
+{
+  "source_type": "volume",
+  "source": "nextcloud_aio_backupdir",
+  "export_directory": "backup/exports",
+  "copy_type": "none",
+  "copy_destination": ""
+}

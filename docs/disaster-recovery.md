@@ -1,15 +1,12 @@
 # Disaster recovery
 
-Scenario: the server and its storage are lost.
+If the server or disk is lost:
 
-Recovery requires this repository, a complete off-site backup, the Borg password and credentials accessible without the failed server. Assign a primary operator and a backup operator. Record secret locations, never their values, in the internal operations inventory.
+1. Retrieve this repository, a complete off-site Borg backup and its encryption password.
+2. Prepare a replacement host and follow [restore](restore.md).
+3. Configure the new hostname/access route and verify users, files, permissions and Office editing.
+4. Reconnect users and sync clients only after validation.
+5. Re-enable backups and confirm a new local and off-site recovery point.
+6. Record recovery time and any data lost since the selected backup.
 
-1. Prepare a replacement Linux host and storage, install Docker and retrieve this repository.
-2. Retrieve the off-site backup and verify its date, completeness and integrity.
-3. Follow [restore](restore.md) in an isolated environment.
-4. Validate administrator login, users, files, shares and collaborative DOCX/XLSX editing.
-5. Restore DNS and user access, then verify sync clients.
-6. Confirm a new local backup and off-site copy.
-7. Record actual recovery time and data loss relative to the backup timestamp; update this procedure.
-
-Complete the first drill before migrating business data. Git contains configuration and procedures, not the application state or recovery secrets.
+Assign a recovery owner and substitute. Keep backup-account access and recovery secrets available without Nextcloud.

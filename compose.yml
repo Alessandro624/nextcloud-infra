@@ -17,5 +17,7 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
 volumes:
+  # Backup storage is provisioned separately by scripts/backup.py.
+  # It is intentionally outside the Compose lifecycle.
   nextcloud_aio_mastercontainer:
     name: nextcloud_aio_mastercontainer

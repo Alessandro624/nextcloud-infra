@@ -5,6 +5,8 @@
 *.secret
 *.key
 rclone.conf
+config/backup.json
+__pycache__/
 credentials/
 data/
 backup/

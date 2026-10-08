@@ -1,5 +1,15 @@
 $ErrorActionPreference = 'Stop'
 $script:Root = Split-Path $PSScriptRoot -Parent
+function Get-TailscaleExecutable {
+    $command = Get-Command tailscale.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if ($command) { return $command.Source }
+    foreach ($directory in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:LOCALAPPDATA)) {
+        if ([string]::IsNullOrWhiteSpace($directory)) { continue }
+        $candidate = Join-Path $directory 'Tailscale/tailscale.exe'
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    throw 'Tailscale CLI was not found in PATH or the standard installation directories. Install Tailscale or add the directory containing tailscale.exe to PATH.'
+}
 function Invoke-Aio {
     & docker compose --project-directory $script:Root -f "$script:Root/compose.yml" @args
     if ($LASTEXITCODE -ne 0) { throw "Docker Compose failed ($LASTEXITCODE)." }
