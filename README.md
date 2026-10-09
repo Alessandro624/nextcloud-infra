@@ -24,6 +24,12 @@ Open [AIO administration](https://localhost:18080). Enter the Tailscale hostname
 
 Startup creates `.env` from `.env.example` if missing. Edit it to change ports and bind addresses. Use AIO to manage applications; Compose manages only the master container.
 
+## Deployment order
+
+1. [Set up Nextcloud](docs/setup.md) and [backup storage](docs/backup.md).
+2. Prepare [automation](docs/automation.md), then optional [monitoring](docs/monitoring.md), before starting the scheduler.
+3. Validate [network isolation](docs/network.md) and the [security checklist](docs/security.md) on the target host.
+
 ## Guides
 
 - [Setup and testing](docs/setup.md)

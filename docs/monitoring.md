@@ -1,6 +1,6 @@
 # Healthchecks monitoring
 
-Optional, outbound-only monitoring. Healthchecks cannot connect to Nextcloud through this integration: no listener, webhook, management API key or remote command handler is added. The server posts HTTPS requests and only checks the acknowledgement. Network isolation still requires [firewall validation](network.md).
+The server sends HTTPS status reports to Healthchecks. No inbound port or remote control is added. Configure this before starting [automation](automation.md).
 
 ## Configure
 
@@ -20,14 +20,14 @@ Optional, outbound-only monitoring. Healthchecks cannot connect to Nextcloud thr
 6. Restrict the secret file to the service account and administrators. On Linux, use `chmod 700 credentials` and `chmod 600 credentials/healthchecks.secret`. On Windows, remove inherited access for unrelated users in the file's Security properties. Both the local configuration and secret file are ignored by Git.
 7. Run `python scripts/automation.py check`, then restart the automation service. `check` validates local URLs but sends nothing. Confirm both checks in Healthchecks before relying on alerts.
 
-No account or check is created automatically. A ping URL is a secret: someone who obtains it could forge a success signal. Do not paste it into screenshots, shell history or committed files.
+Keep ping URLs secret: anyone with a URL can forge status signals.
 
 ## What leaves the server
 
 Each POST contains a small JSON status record with these fields only:
 
 | Fields | Meaning |
-|---|---|
+| --- | --- |
 | `schema`, `observed_at` | Schema version and Unix timestamp |
 | `nextcloud`, `apache` | Docker health status, including stopped/unknown |
 | `phase`, `workflow_active`, `maintenance` | Current workflow and bounded planned downtime |
@@ -38,9 +38,9 @@ Each POST contains a small JSON status record with these fields only:
 
 Raw logs, exceptions, file names, usernames, hostnames, local paths, credentials and document contents are excluded. Healthchecks also sees the public source IP and request times. It stores the status body as a ping log; review its retention and account access settings.
 
-Service health reports planned downtime during backup/export/restart without claiming the containers are healthy. After `maximum_workflow_seconds` (default 7200), a still-active workflow is reported failed. This threshold alerts; it does not kill Borg or a transfer. During other phases Nextcloud and Apache must be healthy. Low disk space, interrupted work and a stalled scheduler also fail the check. This is not an end-to-end Office or login test.
+Planned backup/export/restart downtime is tolerated for up to `maximum_workflow_seconds` (default 7200). Exceeding it sends an alert without killing the job. Outside that downtime, Nextcloud and Apache must be healthy. Disk shortages, interrupted jobs and a stalled scheduler also fail the check.
 
-Backup success is queued after verified copy and retention complete. A separate sender samples status when delivering each event; a separate thread sends service heartbeats. The bounded, in-memory event queue is not replayed after a crash. Monitoring failures cannot block backup/recovery; missing deliveries are detected externally. Requests have a 5-second socket timeout (configurable 1–10 seconds), no immediate retry, no redirects and no inherited HTTP proxy. DNS resolution depends on the host resolver. Response content is never executed. A firewall must enforce the destination policy.
+Backup success follows verified copy and retention. Sending runs separately and cannot block recovery; queued events are lost on process exit. Requests use a 5-second socket timeout, with no redirects or inherited proxy. DNS uses the host resolver. These checks do not test login or Office editing.
 
 ## Acceptance test
 

@@ -1,11 +1,11 @@
 # Network isolation
 
-Target: deny unapproved outbound traffic and public inbound traffic. This repository does **not** install firewall rules. Compose bindings and application allowlists are not network enforcement. Apply policy on the dedicated host/VM or its gateway, then validate both host and container traffic, IPv4 and IPv6.
+Allow only required connections. Apply firewall rules on the target host/VM or gateway: this repository does not install them. Test host and container traffic over both IPv4 and IPv6.
 
 ## Allowed flows
 
 | Source | Destination / purpose | When |
-|---|---|---|
+| --- | --- | --- |
 | Authorized tailnet devices | Nextcloud HTTPS through Tailscale Serve | Normal use |
 | Local administrator | AIO `127.0.0.1:18080` | Administration |
 | Host Tailscale Serve | Apache `127.0.0.1:11000` | Normal use |
@@ -17,9 +17,9 @@ Target: deny unapproved outbound traffic and public inbound traffic. This reposi
 | Host rclone | Selected storage API, authentication and transfer endpoints | Backup/verification/retention |
 | Docker daemon, OS and AIO | Approved registries, package repositories and application download endpoints | Installation and maintenance |
 
-For Drive, inventory the actual Google API/OAuth/download endpoints used by your rclone version; allowing the browser domain `drive.google.com` alone is insufficient. Do not broadly allow every Google domain. Registry downloads can use separate CDN/storage hosts. Tailscale peers and relay addresses can change: use its current firewall guidance rather than a copied list of static IPs.
+Record the actual endpoints used by your versions of rclone, Docker and Tailscale. Drive needs API/authentication/transfer endpoints; registries may use CDNs; Tailscale addresses can change. Avoid broad provider-wide allowances.
 
-Review optional apps before adding exceptions: Talk/STUN, mobile push, federation, external storage, mail, antivirus signatures, external Office/AI integrations and connectivity/update checks can cause additional traffic. Disable unused integrations. Inspect the installed Nextcloud settings `connectivity_check_domains`, `appstoreenabled`, `updatechecker` and `has_internet_connection`; these are application settings, not a firewall. Keep an explicit maintenance process for updates.
+Disable unused integrations. Talk, mobile push, federation, mail, antivirus, external Office/AI and update/connectivity checks may require extra destinations. Review them before adding exceptions and retain a maintenance window for updates.
 
 ## Inventory without exposing secrets
 
@@ -54,6 +54,6 @@ At the host/gateway, record firewall connection and DNS logs during startup, 30 
 6. Repeat the functional tests and [monitoring failure tests](monitoring.md). Verify an unauthorized tailnet device and a LAN device cannot reach administration or the backend. Check all optional AIO container ports, not only Compose ports.
 7. Close the maintenance exceptions and repeat the negative test. Record OS, Docker/AIO versions, rules, observed endpoints, evidence and date in a private deployment record.
 
-Do not declare isolation validated until these tests pass. Docker's firewall integration varies by backend; host INPUT/UFW rules alone may not cover published ports or container forwarding. Future public-domain access requires a new review of inbound HTTPS, certificates and proxy trust.
+Isolation is confirmed only after these tests pass. Host INPUT/UFW rules alone may not cover Docker forwarding. Review HTTPS, certificates and proxy trust again before enabling public-domain access.
 
 References: [Docker firewall behavior](https://docs.docker.com/engine/network/packet-filtering-firewalls/), [Tailscale firewall requirements](https://tailscale.com/docs/integrations/firewalls), [Nextcloud settings](https://docs.nextcloud.com/server/latest/admin_manual/configuration_server/config_sample_php_parameters.html), [rclone Drive](https://rclone.org/drive/).

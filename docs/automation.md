@@ -1,6 +1,8 @@
 # Backup automation and Telegram
 
-Run this optional host service after completing [validation](validation.md). It uses the existing Docker daemon, Python 3.10+, rclone and your configured backup storage. It does not need a public domain or inbound port. Tailscale access stays unchanged.
+Requires Python 3.10+, Docker access and configured [backup storage](backup.md). Install rclone for cloud copies. Run one service per AIO installation.
+
+Prepare this configuration, configure optional [monitoring](monitoring.md), then start the service. Finish with [network](network.md) and [security](security.md) checks.
 
 ## Configure
 
@@ -17,11 +19,11 @@ Run this optional host service after completing [validation](validation.md). It 
    | Manual cooldown / scheduled reservation | 6 hours |
    | Telegram | Disabled |
 
-The daily run catches up when the service starts after its scheduled time, even during working hours. A daylight-saving transition runs at most once per local date; a skipped 02:00 runs after the clock jumps forward. An active operation delays the scheduled run. Failed scheduled runs are not automatically retried that day.
+Starting after the scheduled time can trigger a backup immediately. The scheduler runs at most once per local date, including daylight-saving changes; busy jobs delay it, and failed daily jobs are not retried that day.
 
-The workflow creates a fresh AIO backup, stops the master, exports the repository, restores Nextcloud health, then copies and verifies external storage. Nextcloud is unavailable during backup/export. Automatic AIO updates are not enabled.
+Nextcloud stops during backup/export and restarts before the external upload. Automatic AIO updates stay disabled.
 
-AIO/Borg keeps its standard archive retention: 7 days, 4 weekly and 6 monthly backups. Each exported generation contains the full repository history. Only successful generations recorded by this service are eligible for deletion, after a new external copy verifies. Failed/partial and pre-existing untracked exports need manual cleanup. Allow capacity for a third full export during rotation. The free-space threshold is a preflight check, not an archive-size estimate.
+Borg retains backups from the last 7 days, plus 4 weekly and 6 monthly archives. Each export contains the full repository. Rotation removes only managed copies after a new copy verifies; allow space for a third export. Clean up failed/partial or untracked exports manually. The free-space threshold does not estimate backup size.
 
 ## Enable Telegram
 
@@ -42,7 +44,7 @@ Create a bot with [@BotFather](https://t.me/BotFather), then:
 
 Manual limits are checked again at confirmation. A started attempt consumes quota even if it fails; rejected/expired requests do not. Pending scheduled backups take priority. Quotas and the operation lock survive restarts. There is no Telegram override, restore or delete command.
 
-Notifications report workflow failures, low export space, failed restart, recovery after failure and completion of a manually requested backup. Routine scheduled successes are quiet. Messages contain status only; do not send documents, credentials or raw logs. For alerts when the host is offline and periodic filtered status logs, configure [Healthchecks](monitoring.md). Telegram connectivity failures do not stop the scheduler; polling logs a generic error and retries.
+Telegram reports failures, recovery and manually requested backup completion. Scheduled successes are quiet. Telegram outages do not stop backups. Use [Healthchecks](monitoring.md) for service status and offline alerts.
 
 ## Start on Windows
 
@@ -54,10 +56,15 @@ python -m venv .venv
 Copy-Item config/automation.example.json config/automation.json # Only on first setup
 # Edit config/automation.json and config/backup.json before continuing.
 ./.venv/Scripts/python.exe scripts/automation.py check
+```
+
+`check` validates local settings without contacting services. After configuring monitoring, start with:
+
+```powershell
 ./windows/automation.ps1
 ```
 
-`check` validates configuration without contacting Docker, rclone or Telegram. `serve` activates the schedule immediately. For persistent use, create a Task Scheduler task at logon under the same account: program `powershell.exe`, arguments `-NoProfile -File "ABSOLUTE_REPO_PATH\windows\automation.ps1"`. Select **Do not start a new instance**, disable the execution time limit and enable restart on failure. Docker Desktop must be available in that session. Keep the PC awake. The service has its own daily scheduler; do not create a second daily task.
+For persistent use, create a Task Scheduler task at logon under the same account: program `powershell.exe`, arguments `-NoProfile -File "ABSOLUTE_REPO_PATH\windows\automation.ps1"`. Select **Do not start a new instance**, disable the execution time limit and enable restart on failure. Docker Desktop must be available in that session. Keep the PC awake. The service has its own daily scheduler; do not create a second daily task.
 
 ## Start on Linux
 
@@ -67,10 +74,15 @@ python3 -m venv .venv
 cp config/automation.example.json config/automation.json # Only on first setup
 # Edit both local JSON files.
 .venv/bin/python scripts/automation.py check
+```
+
+After configuring monitoring, start with:
+
+```bash
 .venv/bin/python -u scripts/automation.py serve
 ```
 
-For a server, adapt `config/nextcloud-automation.service.example`: set the existing service account and absolute repository/venv paths. That account needs Docker access, rclone credentials and write access to exports/state. Docker access grants host administration privileges.
+For persistent use instead, adapt `config/nextcloud-automation.service.example`: set the existing service account and absolute repository/venv paths. That account needs Docker access, rclone credentials and write access to exports/state. Docker access grants host administration privileges.
 
 ```bash
 sudo cp config/nextcloud-automation.service.example /etc/systemd/system/nextcloud-automation.service
@@ -81,7 +93,7 @@ journalctl -u nextcloud-automation -f
 
 ## Verify and recover
 
-Run `python -m unittest discover -s tests` for isolated tests. On the disposable installation, enable the bot, check authorization and status, confirm one backup, check that another request is refused, and restore its external copy using [validation](validation.md). Verify a scheduled run separately. Unit tests simulate Docker, rclone and Telegram; they do not replace this acceptance test.
+Check a scheduled backup, Telegram authorization and manual limits, then restore an external copy using [validation](validation.md). Run the [monitoring tests](monitoring.md#acceptance-test) if enabled. Local unit tests (`python -m unittest discover -s tests`) simulate external services.
 
 Stop the service before maintenance and let an active job finish. After a crash, the persistent `active` flag blocks further work. Inspect AIO, Borg and the export helper; finish or stop the interrupted operation, restart AIO applications and confirm their health. Then, with the service stopped, run:
 
