@@ -1,0 +1,8 @@
+{
+  "enabled": false,
+  "allowed_hosts": ["hc-ping.com"],
+  "urls_file": "credentials/healthchecks.secret",
+  "interval_seconds": 300,
+  "timeout_seconds": 5,
+  "maximum_workflow_seconds": 7200
+}

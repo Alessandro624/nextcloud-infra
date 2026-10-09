@@ -1,0 +1,13 @@
+{
+  "timezone": "Europe/Rome",
+  "backup_time": "02:00",
+  "keep_exports": 2,
+  "minimum_free_gib": 10,
+  "manual_daily_limit": 1,
+  "manual_weekly_limit": 3,
+  "minimum_interval_hours": 6,
+  "telegram_enabled": false,
+  "telegram_token_file": "credentials/telegram-token.secret",
+  "telegram_user_ids": [],
+  "telegram_chat_ids": []
+}

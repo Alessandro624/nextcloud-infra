@@ -1,0 +1,19 @@
+[Unit]
+Description=Nextcloud backup automation and optional Telegram bot
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=nextcloud-backup
+WorkingDirectory=/opt/nextcloud-infra
+ExecStart=/opt/nextcloud-infra/.venv/bin/python -u /opt/nextcloud-infra/scripts/automation.py serve
+Restart=on-failure
+RestartSec=30
+TimeoutStopSec=infinity
+KillSignal=SIGINT
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

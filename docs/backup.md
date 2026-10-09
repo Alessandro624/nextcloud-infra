@@ -51,12 +51,12 @@ Commands below use Windows `python`; use `python3` on Linux. Run from this repos
 
 Local copies are checksum-verified and refuse overwrites. Remote copies use rclone's immutable copy and download verification, then publish `COPY-VERIFIED.txt`. Download verification reads the full remote archive and may incur transfer costs. Failed exports/local copies retain `.partial-*` directories; failed remote copies lack a success marker. Resolve the failure before retrying or removing partial files.
 
-Each export contains the full Borg repository: allow space for staging and retained copies. No automatic deletion or scheduling is performed. A successful copy proves byte transfer, not backup freshness or recoverability.
+Each export contains the full Borg repository: allow space for staging and retained copies. These manual commands do not schedule or delete exports. A successful copy proves byte transfer, not backup freshness or recoverability.
 
 ## Recover and operate
 
 Retrieve a complete generation from your disk/NAS or with `rclone copy offsite:nextcloud/GENERATION backup/recovered`. Run `python scripts/backup.py verify --export backup/recovered`, then follow [restore](restore.md).
 
-Configure primary scheduling/retention in AIO. External scheduling, retention cleanup, failure notifications and live locked exports remain future work. Test an actual restore from your chosen external storage before relying on it.
+For scheduled exports, retention cleanup and Telegram controls, follow [automation](automation.md). Disable AIO's own schedule when using that service; keep AIO's standard Borg retention. Otherwise configure primary scheduling in AIO. Test an actual restore from your chosen external storage before relying on it.
 
 References: [AIO backup](https://github.com/nextcloud/all-in-one#backup), [rclone verification](https://rclone.org/commands/rclone_check/).

@@ -20,8 +20,8 @@ DEFAULTS = {
 IMAGE = "ghcr.io/nextcloud-releases/aio-borgbackup:latest"
 
 
-def run(args):
-    return subprocess.run(args, check=True, text=True, stdout=subprocess.PIPE).stdout.strip()
+def run(args, timeout=None):
+    return subprocess.run(args, check=True, text=True, stdout=subprocess.PIPE, timeout=timeout).stdout.strip()
 
 
 def config(path):
@@ -87,6 +87,10 @@ def digest(path):
 
 def verify(folder):
     folder = Path(folder).resolve()
+    for name in ("aio-backup.tar", "aio-backup.tar.sha256"):
+        path = folder / name
+        if path.is_symlink() or path.resolve().parent != folder or not path.is_file():
+            raise ValueError("Archive and checksum must be regular files inside the export")
     expected = (folder / "aio-backup.tar.sha256").read_text().strip().split()
     if len(expected) != 2 or expected[1] != "aio-backup.tar" or not re.fullmatch(r"[0-9a-f]{64}", expected[0]):
         raise ValueError("Invalid checksum file")
@@ -137,6 +141,8 @@ def copy(data, folder):
     folder = verify(folder)
     if folder.name.startswith(".partial-"):
         raise ValueError("Refusing an incomplete export")
+    if {p.name for p in folder.iterdir()} != {"aio-backup.tar", "aio-backup.tar.sha256"}:
+        raise ValueError("Export contains unexpected files; only archive and checksum may be copied")
     mode = data["copy_type"]
     if mode == "none":
         raise ValueError("External copy is disabled; set copy_type and copy_destination")

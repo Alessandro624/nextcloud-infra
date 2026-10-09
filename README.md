@@ -27,9 +27,13 @@ Startup creates `.env` from `.env.example` if missing. Edit it to change ports a
 ## Guides
 
 - [Setup and testing](docs/setup.md)
+- [Full validation and test cleanup](docs/validation.md)
 - [Backup](docs/backup.md)
+- [Backup automation and Telegram](docs/automation.md)
 - [Restore and hostname changes](docs/restore.md)
 - [Security checklist](docs/security.md)
+- [Network isolation](docs/network.md)
+- [External monitoring](docs/monitoring.md)
 - [Disaster recovery checklist](docs/disaster-recovery.md)
 
-Git stores configuration, Docker volumes store data, and your password manager stores secrets. Backup storage supports a Docker volume or host directory, plus optional disk/NAS/rclone copies. External scheduling, retention cleanup and monitoring remain pending.
+Git stores configuration, Docker volumes store data, and your password manager stores secrets. Backup storage supports a Docker volume or host directory, plus optional disk/NAS/rclone copies. Optional host automation provides scheduling, export retention, Telegram controls and outbound Healthchecks status reporting. Firewall enforcement and runtime validation are deployment steps.

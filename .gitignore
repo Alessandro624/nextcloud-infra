@@ -6,7 +6,10 @@
 *.key
 rclone.conf
 config/backup.json
+config/automation.json
+config/healthchecks.json
 __pycache__/
+.venv/
 credentials/
 data/
 backup/

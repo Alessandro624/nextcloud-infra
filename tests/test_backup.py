@@ -12,6 +12,20 @@ spec.loader.exec_module(backup)
 
 
 class BackupTests(unittest.TestCase):
+    def test_unexpected_export_files_are_not_uploaded(self):
+        folder = self.export_fixture()
+        (folder / "credentials.txt").write_text("private fixture")
+        with patch.object(backup, "run") as run:
+            with self.assertRaises(ValueError):
+                backup.copy(dict(backup.DEFAULTS, copy_type="rclone", copy_destination="offsite:backup"), folder)
+            run.assert_not_called()
+
+    def test_linked_archive_is_rejected(self):
+        folder = self.export_fixture()
+        with patch.object(Path, "is_symlink", return_value=True):
+            with self.assertRaises(ValueError):
+                backup.verify(folder)
+
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
