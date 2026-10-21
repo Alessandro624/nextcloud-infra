@@ -82,14 +82,61 @@ After configuring monitoring, start with:
 .venv/bin/python -u scripts/automation.py serve
 ```
 
-For persistent use instead, adapt `config/nextcloud-automation.service.example`: set the existing service account and absolute repository/venv paths. That account needs Docker access, rclone credentials and write access to exports/state. Docker access grants host administration privileges.
+If running manually with sudo, explicitly select the absolute configuration path reported by `rclone config file` without sudo:
+
+```bash
+sudo RCLONE_CONFIG=/absolute/path/rclone.conf \
+  .venv/bin/python scripts/automation.py serve
+```
+
+Run only one automation instance: use either the manual command or the service below.
+
+For persistent use, install the template once, then edit it **before starting**:
 
 ```bash
 sudo cp config/nextcloud-automation.service.example /etc/systemd/system/nextcloud-automation.service
+sudoedit /etc/systemd/system/nextcloud-automation.service
+```
+
+Replace `SERVICE_USER` with an existing account (`id SERVICE_USER`) and every `/absolute/path/...` below with the real path. The template's `nextcloud-backup` account is not created automatically. Preserve the other service settings:
+
+```ini
+[Service]
+User=SERVICE_USER
+WorkingDirectory=/absolute/path/nextcloud-infra
+ExecStart=/absolute/path/nextcloud-infra/.venv/bin/python -u /absolute/path/nextcloud-infra/scripts/automation.py serve
+Environment="RCLONE_CONFIG=/absolute/path/rclone.conf"
+```
+
+Find the rclone path as the user who configured it. The service account needs access to that file, credentials, Docker and writable exports/state. Verify before starting:
+
+```bash
+sudo -u SERVICE_USER -H /absolute/path/nextcloud-infra/.venv/bin/python --version
+sudo -u SERVICE_USER -H docker ps
+sudo -u SERVICE_USER -H rclone --config /absolute/path/rclone.conf listremotes
+```
+
+For an existing service, use `sudo systemctl edit nextcloud-automation` instead of copying the template again. When overriding `ExecStart`, put an empty `ExecStart=` line immediately before its replacement.
+
+```bash
 sudo systemctl daemon-reload
 sudo systemctl enable --now nextcloud-automation
 journalctl -u nextcloud-automation -f
 ```
+
+For an already running service, apply edits with `sudo systemctl restart nextcloud-automation` only when no backup is running.
+
+### Linux permission errors
+
+- `217/USER`: correct `User=` to an existing account; also replace the template's repository paths.
+- Docker socket permission denied: if authorized, run `sudo usermod -aG docker SERVICE_USER`, verify with `sudo -u SERVICE_USER -H docker ps`, then restart the service. Docker group membership grants root-equivalent privileges. Reconnect interactive SSH sessions to refresh groups; do not change socket permissions.
+- `service.lock` permission denied after using sudo: stop the service and any manual instance while idle, then run the command below, replacing the account, group and repository path. Keep `state.json` and lock files; do not delete them or make them world-writable.
+
+```bash
+sudo chown -R SERVICE_USER:SERVICE_GROUP /absolute/path/nextcloud-infra/backup/automation
+```
+
+Obtain the account's primary group with `id -gn SERVICE_USER`. Check ownership of exports separately if needed; do not recursively change the entire repository or Docker volumes. Restart the service after correcting access.
 
 ## Verify and recover
 

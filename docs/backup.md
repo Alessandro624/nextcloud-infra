@@ -24,6 +24,8 @@ Examples (edit the corresponding settings):
 
 Settings are JSON strings, not shell assignments. Defaults apply when the local configuration is absent. Changing configuration does not migrate data or change AIO's saved destination.
 
+On Linux, use the user that configured rclone. If running the Python helper with sudo, pass `sudo RCLONE_CONFIG=/absolute/path/rclone.conf python3 scripts/backup.py ...`; find that path with `rclone config file` **without sudo**.
+
 ## Create the primary backup
 
 1. Startup scripts run `python scripts/backup.py prepare`: volume mode creates/reuses the volume; path mode prints the directory you must prepare.
@@ -56,6 +58,8 @@ Each export contains the full Borg repository: allow space for staging and retai
 ## Recover and operate
 
 Retrieve a complete generation from your disk/NAS or with `rclone copy offsite:nextcloud/GENERATION backup/recovered`. Run `python scripts/backup.py verify --export backup/recovered`, then follow [restore](restore.md).
+
+If destination permissions require root, use `sudo rclone --config /absolute/path/rclone.conf copy offsite:nextcloud/GENERATION backup/recovered`. Use the config path returned by `rclone config file` without sudo and a fresh recovery directory.
 
 For scheduled exports, retention cleanup and Telegram controls, follow [automation](automation.md). Disable AIO's own schedule when using that service; keep AIO's standard Borg retention. Otherwise configure primary scheduling in AIO. Test an actual restore from your chosen external storage before relying on it.
 

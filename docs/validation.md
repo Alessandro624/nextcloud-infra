@@ -126,7 +126,7 @@ For disk/NAS recovery, replace the rclone command with `Copy-Item -LiteralPath (
 
 Download an Ubuntu Server ISO from [Ubuntu releases](https://releases.ubuntu.com/24.04/). Verify `Get-FileHash PATH_TO_ISO -Algorithm SHA256` against the matching official `SHA256SUMS` entry.
 
-Create `$vmName` in VirtualBox with its **own** 80 GB dynamic disk, 4 CPUs, 4 GB RAM initially and NAT networking. Increase resources for larger backups. Install Ubuntu, enable OpenSSH, use `test1` below or substitute your username. Do not install Nextcloud/Docker snaps. Shut down and detach the ISO.
+Create `$vmName` in VirtualBox with its **own** 80 GB dynamic disk, 4 CPUs, 4 GB RAM initially and NAT networking. Increase resources for larger backups. Install Ubuntu, enable OpenSSH, replace `VM_USER` below with the account created during installation. Do not install Nextcloud/Docker snaps. Shut down and detach the ISO.
 
 ```powershell
 $vbox = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
@@ -135,7 +135,7 @@ $vbox = 'C:\Program Files\Oracle\VirtualBox\VBoxManage.exe'
 docker desktop stop
 ```
 
-Start the VM in VirtualBox, then `ssh -p 2222 test1@127.0.0.1`. If this port has an old SSH host key, verify it belonged to your deleted test VM before removing it with `ssh-keygen -R '[127.0.0.1]:2222'`.
+Start the VM in VirtualBox, then `ssh -p 2222 VM_USER@127.0.0.1`. If this port has an old SSH host key, verify it belonged to your deleted test VM before removing it with `ssh-keygen -R '[127.0.0.1]:2222'`.
 
 **Ubuntu:** install Docker from its official repository. Check [upstream instructions](https://docs.docker.com/engine/install/ubuntu/) if using a different Ubuntu release.
 
@@ -171,14 +171,14 @@ In **Windows**, keep the earlier variables or restore their actual values in a n
 ```powershell
 Set-Location "$repo"
 git archive --format=tar --output=backup/repo-validation.tar HEAD
-scp -P 2222 backup/repo-validation.tar test1@127.0.0.1:/home/test1/
-scp -P 2222 "$recovered\aio-backup.tar" "$recovered\aio-backup.tar.sha256" test1@127.0.0.1:/home/test1/
+scp -P 2222 backup/repo-validation.tar VM_USER@127.0.0.1:
+scp -P 2222 "$recovered\aio-backup.tar" "$recovered\aio-backup.tar.sha256" VM_USER@127.0.0.1:
 ```
 
 **Ubuntu:**
 
 ```bash
-cd /home/test1
+cd ~
 sha256sum -c aio-backup.tar.sha256
 mkdir nextcloud-infra
 tar -xf repo-validation.tar -C nextcloud-infra
