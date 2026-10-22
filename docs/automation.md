@@ -19,11 +19,11 @@ Prepare this configuration, configure optional [monitoring](monitoring.md), then
    | Manual cooldown / scheduled reservation | 6 hours |
    | Telegram | Disabled |
 
-Starting after the scheduled time can trigger a backup immediately. The scheduler runs at most once per local date, including daylight-saving changes; busy jobs delay it, and failed daily jobs are not retried that day.
+Starting after the scheduled time can trigger a backup immediately. The scheduler runs at most once per local date, including daylight-saving changes; busy jobs delay it. Failed backup/export stages are not rerun that day; completed cloud exports are retried separately.
 
 Nextcloud stops during backup/export and restarts before the external upload. Automatic AIO updates stay disabled.
 
-Borg retains backups from the last 7 days, plus 4 weekly and 6 monthly archives. Each export contains the full repository. Rotation removes only managed copies after a new copy verifies; allow space for a third export. Clean up failed/partial or untracked exports manually. The free-space threshold does not estimate backup size.
+Borg retains backups from the last 7 days, plus 4 weekly and 6 monthly archives. Each export contains the full repository. Rotation removes only managed copies after a new copy verifies; allow space for a third export. Inspect failed, partial or untracked exports manually before cleanup; incomplete `.partial-*` directories are not resumed and must be inspected before manual cleanup. The free-space threshold does not estimate backup size.
 
 ## Enable Telegram
 
@@ -82,12 +82,18 @@ After configuring monitoring, start with:
 .venv/bin/python -u scripts/automation.py serve
 ```
 
-If running manually with sudo, explicitly select the absolute configuration path reported by `rclone config file` without sudo:
+If running the automation manually on a host where the persistent service uses `SERVICE_USER`, run it as that same account. Do not run the automation itself as `root`, because files created under `backup/automation` or `backup/exports` could later become inaccessible to the systemd service.
+
+Explicitly select the absolute configuration path reported by `rclone config file` for the account that configured rclone:
 
 ```bash
-sudo RCLONE_CONFIG=/absolute/path/rclone.conf \
-  .venv/bin/python scripts/automation.py serve
+sudo -u SERVICE_USER -H env \
+  RCLONE_CONFIG=/absolute/path/rclone.conf \
+  /absolute/path/nextcloud-infra/.venv/bin/python \
+  /absolute/path/nextcloud-infra/scripts/automation.py serve
 ```
+
+Use `sudo` for system administration such as systemd or ownership corrections, not to run the automation as `root`.
 
 Run only one automation instance: use either the manual command or the service below.
 
@@ -108,7 +114,7 @@ ExecStart=/absolute/path/nextcloud-infra/.venv/bin/python -u /absolute/path/next
 Environment="RCLONE_CONFIG=/absolute/path/rclone.conf"
 ```
 
-Find the rclone path as the user who configured it. The service account needs access to that file, credentials, Docker and writable exports/state. Verify before starting:
+Find the rclone path as the user who configured it. The service account needs access to the rclone configuration and credentials, Docker, and read/write access to the automation-managed `backup/automation` and `backup/exports` directories. The service also needs read access to completed exports retained for cloud retries. Verify before starting:
 
 ```bash
 sudo -u SERVICE_USER -H /absolute/path/nextcloud-infra/.venv/bin/python --version
@@ -130,22 +136,42 @@ For an already running service, apply edits with `sudo systemctl restart nextclo
 
 - `217/USER`: correct `User=` to an existing account; also replace the template's repository paths.
 - Docker socket permission denied: if authorized, run `sudo usermod -aG docker SERVICE_USER`, verify with `sudo -u SERVICE_USER -H docker ps`, then restart the service. Docker group membership grants root-equivalent privileges. Reconnect interactive SSH sessions to refresh groups; do not change socket permissions.
-- `service.lock` permission denied after using sudo: stop the service and any manual instance while idle, then run the command below, replacing the account, group and repository path. Keep `state.json` and lock files; do not delete them or make them world-writable.
+- Permission errors under `backup/automation` or `backup/exports`: stop the service and any manual instance while idle. Inspect the affected paths, then correct ownership only in these managed directories:
 
 ```bash
-sudo chown -R SERVICE_USER:SERVICE_GROUP /absolute/path/nextcloud-infra/backup/automation
+id -gn SERVICE_USER # Use this value for SERVICE_GROUP.
+sudo find /absolute/path/nextcloud-infra/backup/automation /absolute/path/nextcloud-infra/backup/exports \
+  -maxdepth 2 -printf '%M %u:%g %p\n'
+sudo chown -R SERVICE_USER:SERVICE_GROUP \
+  /absolute/path/nextcloud-infra/backup/automation \
+  /absolute/path/nextcloud-infra/backup/exports
+sudo -u SERVICE_USER -H test -w /absolute/path/nextcloud-infra/backup/automation
+sudo -u SERVICE_USER -H test -w /absolute/path/nextcloud-infra/backup/exports
+sudo systemctl restart nextcloud-automation
+journalctl -u nextcloud-automation -f
 ```
 
-Obtain the account's primary group with `id -gn SERVICE_USER`. Check ownership of exports separately if needed; do not recursively change the entire repository or Docker volumes. Restart the service after correcting access.
+Keep state and lock files. Do not make them world-writable or recursively change the repository, Borg source or Docker volumes. Inspect `.partial-*` directories separately: they are incomplete exports, not automatically resumable archives.
 
 ## Verify and recover
 
 Check a scheduled backup, Telegram authorization and manual limits, then restore an external copy using [validation](validation.md). Run the [monitoring tests](monitoring.md#acceptance-test) if enabled. Local unit tests (`python -m unittest discover -s tests`) simulate external services.
 
-Stop the service before maintenance and let an active job finish. After a crash, the persistent `active` flag blocks further work. Inspect AIO, Borg and the export helper; finish or stop the interrupted operation, restart AIO applications and confirm their health. Then, with the service stopped, run:
+Stop the service before maintenance and let an active job finish.
+
+Every five minutes, a separate worker retries interrupted application recovery after Borg and the export helper have stopped. It does not block the scheduler or heartbeat. Persistent ambiguity or unhealthy applications keep new backups blocked.
+
+For `copy_type: rclone`, the completed export and destination are recorded before application restart. Failed upload, verification or retention is retried every five minutes after the previous attempt ends, including after a service restart. Retries reuse that export, recheck its checksum and remote content, preserve quotas and do not stop Nextcloud again. New backups wait until the pending copy succeeds; a prolonged outage therefore also delays new local backups. Monitor the dedicated backup check. Configuration changes, corrupt exports and permission errors require correction; retries cannot repair them. Local filesystem copies and incomplete exports are not automatically resumed.
+
+Telegram polling and service heartbeats retry independently. Backup reporting events are best effort and are not persisted. A failed backup alone does not mark healthy applications as unhealthy.
+
+If automatic recovery cannot proceed, inspect AIO, Borg and the export helper; finish or stop the interrupted operation, restart AIO applications and confirm their health. Then, with the service stopped, run recovery **as the same service account**, not as `root`:
 
 ```bash
-python scripts/automation.py recover
+sudo -u SERVICE_USER -H env \
+  RCLONE_CONFIG=/absolute/path/rclone.conf \
+  /absolute/path/nextcloud-infra/.venv/bin/python \
+  /absolute/path/nextcloud-infra/scripts/automation.py recover
 ```
 
 This checks that Borg/export are stopped and Nextcloud is healthy, then clears the interruption flag without resetting quotas. Inspect partial exports separately. Preserve `backup/automation/state.json`; deleting it loses quota and retention history. Use only one repository checkout/service per AIO installation. Do not migrate this state to a different installation without reviewing its recorded paths.

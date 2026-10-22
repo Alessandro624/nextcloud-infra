@@ -42,7 +42,15 @@ class MonitoringTests(unittest.TestCase):
         self.assertEqual(payload["error_code"], "STATUS_UNAVAILABLE")
 
     def test_urls_reject_unapproved_hosts_credentials_query_and_http(self):
-        for url in ("http://hc-ping.com/", self.urls["backup"].replace("hc-ping.com", "evil.example"), self.urls["backup"] + "?secret=x", self.urls["backup"] + "#fragment", self.urls["backup"].replace("hc-ping.com", "user:pass@hc-ping.com"), self.urls["backup"].replace("hc-ping.com", "hc-ping.com:8443"), self.urls["backup"] + "/start"):
+        for url in (
+            "http://hc-ping.com/",
+            self.urls["backup"].replace("hc-ping.com", "evil.example"),
+            self.urls["backup"] + "?secret=x",
+            self.urls["backup"] + "#fragment",
+            self.urls["backup"].replace("hc-ping.com", "user:pass@hc-ping.com"),
+            self.urls["backup"].replace("hc-ping.com", "hc-ping.com:8443"),
+            self.urls["backup"] + "/start",
+        ):
             self.urls["service"] = url
             with self.assertRaises(ValueError) as error:
                 self.enabled()
@@ -117,6 +125,14 @@ class MonitoringTests(unittest.TestCase):
         service.scheduler_tick -= 100
         with patch.object(app, "inspect", return_value={"Running": True, "Health": {"Status": "healthy"}}), patch.object(app.shutil, "disk_usage", return_value=Mock(free=100 * 1024**3)):
             self.assertEqual(service.status_report()["error_code"], "SCHEDULER_STALLED")
+
+    def test_backup_failure_does_not_fail_healthy_service(self):
+        service = self.service()
+        service.state.update(failed=True, last_failure={"message": "PRIVATE"})
+        with patch.object(app, "inspect", return_value={"Running": True, "Health": {"Status": "healthy"}}), patch.object(app.shutil, "disk_usage", return_value=Mock(free=100 * 1024**3)):
+            report = service.status_report()
+        self.assertEqual(report["error_code"], "NONE")
+        self.assertNotIn("PRIVATE", json.dumps(report))
 
     def test_reporting_failure_cannot_escape_into_workflow(self):
         service = self.service()

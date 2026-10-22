@@ -7,7 +7,7 @@ import re
 import urllib.parse
 import urllib.request
 
-PHASES = {"Starting", "Preflight", "AIO backup", "Export", "Restart", "External copy", "Retention", "Idle", "Recovery required"}
+PHASES = {"Starting", "Preflight", "AIO backup", "Export", "Restart", "External copy", "Retention", "Idle", "Recovery required", "Automatic recovery"}
 HEALTH = {"healthy", "unhealthy", "starting", "stopped", "unknown"}
 ERRORS = {"NONE", "WORKFLOW_FAILED", "RECOVERY_REQUIRED", "WORKFLOW_TIMEOUT", "LOW_SPACE", "STORAGE_UNAVAILABLE", "SERVICE_UNHEALTHY", "SCHEDULER_STALLED", "STATUS_UNAVAILABLE"}
 
@@ -76,10 +76,17 @@ class Monitor:
                 if not isinstance(value, str):
                     raise ValueError()
                 parsed = urllib.parse.urlsplit(value)
-                if (parsed.scheme != "https" or parsed.hostname not in hosts or parsed.port not in (None, 443)
-                        or parsed.username or parsed.password or parsed.query or parsed.fragment
-                        or not re.fullmatch(r"/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", parsed.path)
-                        or any(c.isspace() for c in value)):
+                if (
+                    parsed.scheme != "https"
+                    or parsed.hostname not in hosts
+                    or parsed.port not in (None, 443)
+                    or parsed.username
+                    or parsed.password
+                    or parsed.query
+                    or parsed.fragment
+                    or not re.fullmatch(r"/[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}", parsed.path)
+                    or any(c.isspace() for c in value)
+                ):
                     raise ValueError()
             if urls["backup"] == urls["service"]:
                 raise ValueError()

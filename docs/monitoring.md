@@ -34,7 +34,7 @@ Each POST contains a small JSON status record with these fields only:
 | `scheduler_alive` | Scheduler has advanced recently |
 | `last_backup`, `last_copy` | Unix timestamps of recorded successes, or null |
 | `export_free_gib` | Free export-filesystem space, or null |
-| `error_code` | Fixed code such as `LOW_SPACE`, `WORKFLOW_FAILED`, `RECOVERY_REQUIRED` |
+| `error_code` | Fixed code such as `LOW_SPACE`, `SERVICE_UNHEALTHY`, `RECOVERY_REQUIRED` |
 
 Raw logs, exceptions, file names, usernames, hostnames, local paths, credentials and document contents are excluded. Healthchecks also sees the public source IP and request times. It stores the status body as a ping log; review its retention and account access settings.
 
@@ -48,7 +48,7 @@ Backup success follows verified copy and retention. Sending runs separately and 
 - Complete a scheduled backup: expect start then success. Complete a manual backup: expect updated service timestamps, without resetting the scheduled check.
 - Stop the automation service while idle and wait for the missing-heartbeat alert; restart and verify recovery.
 - On the disposable test deployment, stop Apache outside a backup: expect service failure; restart it and verify recovery.
-- Make the test external destination unavailable: expect backup failure and no success ping. Restore connectivity and run a successful backup.
+- Make the test external destination unavailable: expect backup failure and no success ping. Restore connectivity: a pending rclone copy should retry without another backup or application stop. Confirm verified-copy success.
 - Block Healthchecks egress: backup and Nextcloud recovery must still finish, while Healthchecks reports missing signals. Unblock and confirm heartbeat recovery.
 - Confirm the alert arrives when the server is powered off. This tests the external notification route, not the local Telegram bot.
 

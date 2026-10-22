@@ -78,7 +78,9 @@ class AutomationTests(unittest.TestCase):
         states = [{"Running": True}, {"Running": False, "StartedAt": "old"}, {"Running": False, "StartedAt": "old", "ExitCode": 0}]
         with patch.object(app, "inspect", side_effect=states), patch.object(app, "validate_source"), patch.object(app, "aio"), patch.object(
             app.shutil, "disk_usage", return_value=Mock(free=10**15)
-        ), patch.object(self.service, "restart") as restart, patch.object(app.backup, "copy") as copy, patch.object(self.service, "prune") as prune, patch.object(self.service, "report_backup") as report:
+        ), patch.object(self.service, "restart") as restart, patch.object(app.backup, "copy") as copy, patch.object(self.service, "prune") as prune, patch.object(
+            self.service, "report_backup"
+        ) as report:
             self.service.work(False)
             restart.assert_called_once()
             copy.assert_not_called()
@@ -103,7 +105,9 @@ class AutomationTests(unittest.TestCase):
             app.backup, "copy", side_effect=lambda *args: order.append("copy")
         ), patch.object(
             self.service, "prune", side_effect=lambda: order.append("prune")
-        ), patch.object(self.service, "report_backup", side_effect=lambda event: order.append("monitor:" + event)):
+        ), patch.object(
+            self.service, "report_backup", side_effect=lambda event: order.append("monitor:" + event)
+        ):
             self.service.work(False)
         self.assertEqual(order, ["monitor:start", "restart", "copy", "prune", "monitor:success"])
         self.assertFalse(self.service.state["failed"])
@@ -156,6 +160,81 @@ class AutomationTests(unittest.TestCase):
             with self.assertRaises(OSError):
                 self.service.prune()
         self.assertEqual(len(self.service.state["copies"]), 3)
+
+    def pending_cloud_copy(self):
+        self.data.update(copy_type="rclone", copy_destination="offsite:backups")
+        folder = self.root / "exports/20260601T020000Z-1234abcd"
+        self.service.state["pending_copy"] = {"folder": str(folder), "data": dict(self.data), "manual": False}
+        self.service.save()
+        return folder
+
+    def test_cloud_retry_survives_restart_without_new_backup(self):
+        folder = self.pending_cloud_copy()
+        service = app.Service(self.cfg, self.data, self.root / "state")
+        service.state["starts"] = [{"at": self.now, "manual": True}]
+        with patch.object(app.backup, "copy") as copy, patch.object(service, "prune"), patch.object(app, "aio") as aio, patch.object(service, "report_backup") as report:
+            service.retry_once()
+        copy.assert_called_once_with(self.data, folder)
+        aio.assert_not_called()
+        report.assert_called_once_with("success")
+        self.assertNotIn("pending_copy", service.state)
+        self.assertEqual(service.state["starts"], [{"at": self.now, "manual": True}])
+        self.assertEqual(len(service.state["copies"]), 1)
+
+    def test_offline_copy_is_kept_then_retried(self):
+        self.pending_cloud_copy()
+        with patch.object(app.backup, "copy", side_effect=[OSError("offline"), None]) as copy, patch.object(self.service, "prune") as prune:
+            self.service.retry_once()
+            self.assertIn("pending_copy", self.service.state)
+            self.assertFalse(self.service.state["active"])
+            prune.assert_not_called()
+            self.service.retry_once()
+        self.assertEqual(copy.call_count, 2)
+        self.assertNotIn("pending_copy", self.service.state)
+
+    def test_retry_refuses_changed_destination_and_concurrent_work(self):
+        self.pending_cloud_copy()
+        self.data["copy_destination"] = "other:backups"
+        with patch.object(app.backup, "copy") as copy:
+            self.service.retry_once()
+            copy.assert_not_called()
+            self.service.busy = True
+            self.service.retry_once()
+            self.assertTrue(self.service.busy)
+        self.assertIn("pending_copy", self.service.state)
+
+    def test_recovery_waits_for_borg_then_retries(self):
+        self.service.state["active"] = True
+        healthy = {"Running": True, "Health": {"Status": "healthy"}}
+        snapshot = {"borg": {"Running": True}, "master": {"Running": True}, "export_helper_running": False, "apps": {"nextcloud": healthy, "apache": healthy}}
+        with patch.object(self.service, "recovery_snapshot", return_value=snapshot), patch.object(self.service, "restart") as restart:
+            self.service.retry_once()
+            self.assertTrue(self.service.state["active"])
+            snapshot["borg"]["Running"] = False
+            self.service.retry_once()
+            self.assertFalse(self.service.state["active"])
+            restart.assert_not_called()
+
+    def test_pending_copy_blocks_new_backup(self):
+        self.pending_cloud_copy()
+        with patch.object(app.threading, "Thread") as thread:
+            self.service.begin(False, self.day)
+            thread.assert_not_called()
+
+    def test_retention_retry_does_not_duplicate_copy_ledger(self):
+        self.pending_cloud_copy()
+        with patch.object(app.backup, "copy"), patch.object(self.service, "prune", side_effect=[OSError("offline"), None]):
+            self.service.retry_once()
+            self.service.retry_once()
+        self.assertEqual(len(self.service.state["copies"]), 1)
+        self.assertNotIn("pending_copy", self.service.state)
+
+    def test_telegram_status_does_not_disclose_exception_message(self):
+        self.cfg.update(telegram_user_ids=[1], telegram_chat_ids=[2])
+        self.service.state["last_failure"] = {"at": self.now, "phase": "External copy", "type": "OSError", "message": "PRIVATE_PATH"}
+        with patch.object(app.time, "time", return_value=self.now), patch.object(self.service, "api") as api:
+            self.service.handle({"message": {"from": {"id": 1}, "chat": {"id": 2}, "date": self.now, "text": "/backup_status"}})
+        self.assertNotIn("PRIVATE_PATH", api.call_args.kwargs["text"])
 
 
 if __name__ == "__main__":

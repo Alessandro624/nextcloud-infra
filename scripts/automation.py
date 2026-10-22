@@ -86,7 +86,7 @@ def next_slot(cfg, now):
 
 
 def manual_allowed(cfg, state, now, busy=False):
-    if busy or state.get("active"):
+    if busy or state.get("active") or state.get("pending_copy"):
         return False, "An operation is active or needs operator recovery."
     local = datetime.fromtimestamp(now, ZoneInfo(cfg["timezone"]))
     if local.strftime("%H:%M") >= cfg["backup_time"] and state.get("scheduled_day") != local.date().isoformat():
@@ -185,7 +185,7 @@ class Service:
     def begin(self, manual, day=None):
         with self.mutex:
             now = time.time()
-            if self.busy or self.state.get("active"):
+            if self.busy or self.state.get("active") or self.state.get("pending_copy"):
                 return "Operation active or interrupted; operator recovery required if the service restarted."
             if manual:
                 allowed, reason = manual_allowed(self.cfg, self.state, now)
@@ -240,13 +240,17 @@ class Service:
             self.phase("Export")
             backup.run(["docker", "stop", MASTER])
             folder = backup.export(self.data)
+            if self.data["copy_type"] == "rclone":
+                with self.mutex:
+                    self.state["pending_copy"] = {"folder": str(folder.resolve()), "data": dict(self.data), "manual": manual}
+                    self.save()
             self.phase("Restart")
             self.restart()
             needs_restart = False
             self.phase("External copy")
             backup.copy(self.data, folder)
             with self.mutex:
-                self.state["copies"].append({"name": folder.name, "base": str(base.resolve()), "type": self.data["copy_type"], "destination": self.data["copy_destination"]})
+                self.record_copy(folder)
                 self.state["last_copy"] = time.time()
                 self.save()
             self.phase("Retention")
@@ -254,6 +258,7 @@ class Service:
             recovered = self.state.get("failed", False)
             with self.mutex:
                 self.state["failed"] = False
+                self.state.pop("pending_copy", None)
                 self.save()
             if manual or recovered:
                 self.notify("Backup and external copy verified." + (" Service recovered after a previous failure." if recovered else ""))
@@ -284,6 +289,69 @@ class Service:
                 self.state["phase"] = "Recovery required" if restart_failed else "Idle"
                 self.busy = False
                 self.save()
+
+    def record_copy(self, folder):
+        item = {"name": folder.name, "base": str(folder.parent.resolve()), "type": self.data["copy_type"], "destination": self.data["copy_destination"]}
+        if item not in self.state["copies"]:
+            self.state["copies"].append(item)
+
+    def retry_once(self):
+        """Retry stale recovery or a completed cloud export without a new backup."""
+        with self.mutex:
+            if self.busy or not (self.state.get("active") or self.state.get("pending_copy")):
+                return
+            self.busy = True
+        try:
+            if self.state.get("active") and not self.recover_interrupted():
+                return
+            pending = self.state.get("pending_copy")
+            if not pending:
+                return
+            # Never silently send an old export to a newly configured destination.
+            if pending["data"] != self.data or self.data["copy_type"] != "rclone":
+                raise ValueError("Pending copy configuration changed; operator review required")
+            folder = Path(pending["folder"])
+            base = Path(self.data["export_directory"])
+            if not base.is_absolute():
+                base = backup.ROOT / base
+            if not GENERATION.fullmatch(folder.name) or folder.is_symlink() or folder.resolve().parent != base.resolve():
+                raise ValueError("Invalid pending export path")
+            with self.mutex:
+                self.state.update(active=True, active_since=time.time())
+                self.save()
+            self.phase("External copy")
+            backup.copy(self.data, folder)  # Re-verifies the archive and remote content.
+            with self.mutex:
+                self.record_copy(folder)
+                self.state["last_copy"] = time.time()
+                self.save()
+            self.phase("Retention")
+            self.prune()
+            with self.mutex:
+                self.state.pop("pending_copy", None)
+                self.state.update(failed=False, active=False, phase="Idle")
+                self.save()
+            if not pending["manual"]:
+                self.report_backup("success")
+            self.notify("External copy verified after automatic retry.")
+        except Exception as error:
+            print(f"Automatic retry failed: {type(error).__name__}; retrying in 5 minutes", flush=True)
+            with self.mutex:
+                self.state["failed"] = True
+                # Copy retries run only after application recovery has succeeded.
+                if self.state.get("phase") in {"External copy", "Retention"}:
+                    self.state.update(active=False, phase="Idle")
+                self.save()
+        finally:
+            with self.mutex:
+                self.busy = False
+
+    def retry_loop(self):
+        while True:
+            worker = threading.Thread(target=self.retry_once, daemon=False)
+            worker.start()
+            worker.join()
+            time.sleep(300)
 
     def status_report(self):
         with self.mutex:
@@ -419,7 +487,7 @@ class Service:
             print(f"Automatic recovery inspection failed: {type(error).__name__}: {error}", flush=True)
             return False
 
-        if snapshot["borg"].get("Running"):
+        if snapshot["borg"].get("Running") or snapshot["borg"].get("Restarting"):
             print("Automatic recovery refused: Borg operation is still running.", flush=True)
             return False
 
@@ -545,7 +613,7 @@ class Service:
                 failure = self.state.get("last_failure")
                 if failure:
                     failure_at = datetime.fromtimestamp(failure["at"], ZoneInfo(self.cfg["timezone"])).isoformat()
-                    text += "\nlast_failure: " + failure_at + " during " + failure.get("phase", "unknown phase") + " (" + failure.get("type", "Error") + ": " + failure.get("message", "") + ")"
+                    text += "\nlast_failure: " + failure_at + " during " + failure.get("phase", "unknown phase") + " (" + failure.get("type", "Error") + "). Details are in the host logs."
             elif command == "/storage":
                 base = Path(self.data["export_directory"])
                 if not base.is_absolute():
@@ -569,9 +637,7 @@ class Service:
                 time.sleep(10)
 
     def serve(self):
-        if self.state.get("active"):
-            if not self.recover_interrupted():
-                self.notify("Interrupted workflow requires operator recovery. " "The service remains online for health/status reporting, " "but new backups are blocked.")
+        threading.Thread(target=self.retry_loop, daemon=True).start()
         if self.cfg["telegram_enabled"]:
             threading.Thread(target=self.telegram, daemon=True).start()
         if self.monitor.cfg["enabled"]:
@@ -585,6 +651,10 @@ class Service:
                 result = self.begin(False, day)
                 if result.startswith("Backup started"):
                     print(result, flush=True)
+                else:
+                    # Do not hide scheduler decisions: after a restart this makes
+                    # stale/interrupted state immediately visible in the journal.
+                    print(f"Scheduled backup not started: {result}", flush=True)
             time.sleep(15)
 
 

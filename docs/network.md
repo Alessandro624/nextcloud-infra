@@ -10,6 +10,7 @@ Allow only required connections. Apply firewall rules on the target host/VM or g
 | Local administrator | AIO `127.0.0.1:18080` | Administration |
 | Host Tailscale Serve | Apache `127.0.0.1:11000` | Normal use |
 | AIO containers | Required peers on the AIO Docker network | Normal use |
+| AIO containers | Server Tailscale IP, TCP 443 for Office callbacks | Normal use; see [Office connectivity](tailscale-office.md) |
 | Host and containers | Approved DNS resolver; host to approved time source | Normal use |
 | Host Tailscale | Coordination, certificate provisioning, authorized peers and selected DERP/STUN infrastructure | Normal use |
 | Automation | `api.telegram.org:443` | Only if Telegram enabled |
