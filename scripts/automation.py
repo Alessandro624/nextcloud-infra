@@ -11,6 +11,7 @@ import re
 import shutil
 import threading
 import time
+import traceback
 import urllib.request
 import uuid
 from zoneinfo import ZoneInfo
@@ -133,6 +134,13 @@ class Service:
         directory.mkdir(parents=True, exist_ok=True, mode=0o700)
         self.path = directory / "state.json"
         self.state = json.loads(self.path.read_text()) if self.path.exists() else {"starts": [], "copies": [], "offset": 0}
+        # Backward-compatible defaults for state files created by older versions.
+        self.state.setdefault("starts", [])
+        self.state.setdefault("copies", [])
+        self.state.setdefault("offset", 0)
+        self.state.setdefault("active", False)
+        self.state.setdefault("phase", "Idle")
+        self.state.setdefault("failed", False)
         self.mutex = threading.RLock()
         self.busy = False
         self.pending = {}
@@ -252,13 +260,15 @@ class Service:
             if not manual:
                 self.report_backup("success")
         except Exception as error:
-            # Keep diagnostics on the host, not in Telegram.
-            detail = str(error) if isinstance(error, ValueError) else type(error).__name__
-            print("Backup failed: " + detail, flush=True)
+            # Keep full diagnostics on the host. Telegram receives only a safe summary.
+            phase = self.state.get("phase", "unknown phase")
+            print(f"Backup failed during {phase}: {type(error).__name__}: {error}", flush=True)
+            traceback.print_exc()
             with self.mutex:
                 self.state["failed"] = True
+                self.state["last_failure"] = {"at": time.time(), "phase": phase, "type": type(error).__name__, "message": str(error)}
                 self.save()
-            self.notify("Backup workflow failed during " + self.state.get("phase", "unknown phase") + ". Check the host logs and AIO.")
+            self.notify("Backup workflow failed during " + phase + ". Check the host logs and AIO.")
             if not manual:
                 self.report_backup("fail")
         finally:
@@ -284,9 +294,16 @@ class Service:
         now = time.time()
         age = now - state.get("active_since", 0)
         maintenance = busy and active and 0 <= age <= self.monitor.cfg["maximum_workflow_seconds"] and state.get("phase") in {"AIO backup", "Export", "Restart"}
-        result = {"observed_at": now, "last_backup": state.get("last_backup"), "last_copy": state.get("last_copy"),
-                  "phase": state.get("phase", "Idle"), "workflow_active": active, "maintenance": maintenance,
-                  "scheduler_alive": time.monotonic() - tick < 90, "error_code": "NONE"}
+        result = {
+            "observed_at": now,
+            "last_backup": state.get("last_backup"),
+            "last_copy": state.get("last_copy"),
+            "phase": state.get("phase", "Idle"),
+            "workflow_active": active,
+            "maintenance": maintenance,
+            "scheduler_alive": time.monotonic() - tick < 90,
+            "error_code": "NONE",
+        }
         for key, name in (("nextcloud", "nextcloud-aio-nextcloud"), ("apache", "nextcloud-aio-apache")):
             try:
                 container = inspect(name)
@@ -304,8 +321,11 @@ class Service:
             result["error_code"] = "STORAGE_UNAVAILABLE"
         if not maintenance and any(result[k] != "healthy" for k in ("nextcloud", "apache")):
             result["error_code"] = "SERVICE_UNHEALTHY"
-        if state.get("failed"):
-            result["error_code"] = "WORKFLOW_FAILED"
+        # A failed backup is reported by the dedicated "backup" monitor and is
+        # deliberately not a service-health failure. The scheduler can be healthy
+        # while the most recent workflow failed.
+        if state.get("last_failure"):
+            result["last_failure"] = state["last_failure"]
         if active and (age < 0 or age > self.monitor.cfg["maximum_workflow_seconds"]):
             result["error_code"] = "WORKFLOW_TIMEOUT"
         if active and not busy:
@@ -336,10 +356,101 @@ class Service:
         while True:
             try:
                 status = self.status_report()
+            except Exception as error:
+                print(
+                    f"Service status collection failed: {type(error).__name__}: {error}",
+                    flush=True,
+                )
+                status = {"error_code": "STATUS_UNAVAILABLE"}
+
+            try:
                 self.monitor.ping("service", "success" if status["error_code"] == "NONE" else "fail", status)
-            except Exception:
-                self.monitor.ping("service", "fail", {"error_code": "STATUS_UNAVAILABLE"})
+            except Exception as error:
+                # Connectivity/reporting failures must never kill the heartbeat
+                # thread. The next interval will retry automatically.
+                print(f"Service health reporting failed: {type(error).__name__}: {error}", flush=True)
+
             time.sleep(self.monitor.cfg["interval_seconds"])
+
+    def recovery_snapshot(self):
+        """Return enough runtime state to decide whether automatic recovery is safe."""
+        borg = inspect(BORG)
+        master = inspect(MASTER)
+        running_names = set(backup.run(["docker", "ps", "--format", "{{.Names}}"], timeout=15).splitlines())
+        apps = {}
+        for name in ("nextcloud-aio-nextcloud", "nextcloud-aio-apache"):
+            try:
+                apps[name] = inspect(name)
+            except Exception:
+                apps[name] = None
+        return {"borg": borg, "master": master, "export_helper_running": "nextcloud-infra-backup-export" in running_names, "apps": apps}
+
+    @staticmethod
+    def apps_healthy(snapshot):
+        return all(state and state.get("Running") and not state.get("Restarting") and state.get("Health", {}).get("Status") == "healthy" for state in snapshot["apps"].values())
+
+    def acknowledge_recovery(self, automatic=False):
+        with self.mutex:
+            self.state["active"] = False
+            self.state["phase"] = "Idle"
+            self.state.pop("active_since", None)
+            self.save()
+        message = "Interrupted workflow automatically recovered; scheduler resumed." if automatic else "Recovery acknowledged; quota and copy history preserved."
+        print(message, flush=True)
+        if automatic:
+            self.notify(message)
+
+    def recover_interrupted(self):
+        """Safely recover stale persistent workflow state after a process restart.
+
+        Automatic recovery is attempted only when no Borg job and no export helper
+        are running. If application health is already good, only stale state is
+        cleared. Otherwise the normal AIO restart path is attempted. Any ambiguity
+        leaves the persistent recovery lock in place for operator intervention.
+        """
+        if not self.state.get("active"):
+            return True
+
+        print("Interrupted workflow detected; evaluating automatic recovery.", flush=True)
+
+        try:
+            snapshot = self.recovery_snapshot()
+        except Exception as error:
+            print(f"Automatic recovery inspection failed: {type(error).__name__}: {error}", flush=True)
+            return False
+
+        if snapshot["borg"].get("Running"):
+            print("Automatic recovery refused: Borg operation is still running.", flush=True)
+            return False
+
+        if snapshot["export_helper_running"]:
+            print("Automatic recovery refused: export helper is still running.", flush=True)
+            return False
+
+        if snapshot["master"].get("Running") and self.apps_healthy(snapshot):
+            self.acknowledge_recovery(automatic=True)
+            return True
+
+        # No destructive/copy operation is running. Restore the application stack,
+        # then clear only the stale workflow-active marker.
+        try:
+            self.phase("Automatic recovery")
+            self.restart()
+            snapshot = self.recovery_snapshot()
+            if snapshot["borg"].get("Running") or snapshot["export_helper_running"]:
+                raise ValueError("A backup/export operation appeared during recovery")
+            if not snapshot["master"].get("Running") or not self.apps_healthy(snapshot):
+                raise ValueError("Nextcloud is not healthy after automatic recovery")
+            self.acknowledge_recovery(automatic=True)
+            return True
+        except Exception as error:
+            print(f"Automatic recovery failed: {type(error).__name__}: {error}", flush=True)
+            traceback.print_exc()
+            with self.mutex:
+                self.state["active"] = True
+                self.state["phase"] = "Recovery required"
+                self.save()
+            return False
 
     def restart(self):
         backup.run(["docker", "start", MASTER])
@@ -431,6 +542,10 @@ class Service:
                     key + ": " + (datetime.fromtimestamp(self.state[key], ZoneInfo(self.cfg["timezone"])).isoformat() if self.state.get(key) else "No recorded success")
                     for key in ("last_backup", "last_copy")
                 )
+                failure = self.state.get("last_failure")
+                if failure:
+                    failure_at = datetime.fromtimestamp(failure["at"], ZoneInfo(self.cfg["timezone"])).isoformat()
+                    text += "\nlast_failure: " + failure_at + " during " + failure.get("phase", "unknown phase") + " (" + failure.get("type", "Error") + ": " + failure.get("message", "") + ")"
             elif command == "/storage":
                 base = Path(self.data["export_directory"])
                 if not base.is_absolute():
@@ -455,7 +570,8 @@ class Service:
 
     def serve(self):
         if self.state.get("active"):
-            self.notify("Interrupted workflow detected. Inspect AIO and recover on the host before clearing state.")
+            if not self.recover_interrupted():
+                self.notify("Interrupted workflow requires operator recovery. " "The service remains online for health/status reporting, " "but new backups are blocked.")
         if self.cfg["telegram_enabled"]:
             threading.Thread(target=self.telegram, daemon=True).start()
         if self.monitor.cfg["enabled"]:
@@ -487,18 +603,14 @@ def main():
     with instance_lock(STATE_DIR):
         service = Service(cfg, data)
         if args.action == "recover":
-            if inspect(BORG)["Running"] or not inspect(MASTER)["Running"]:
-                raise ValueError("Stop Borg operations and restore the master before recovery")
-            names = backup.run(["docker", "ps", "--format", "{{.Names}}"]).splitlines()
-            if "nextcloud-infra-backup-export" in names:
+            snapshot = service.recovery_snapshot()
+            if snapshot["borg"].get("Running"):
+                raise ValueError("Stop Borg operations before recovery")
+            if snapshot["export_helper_running"]:
                 raise ValueError("Export helper still running")
-            for name in ("nextcloud-aio-nextcloud", "nextcloud-aio-apache"):
-                state = inspect(name)
-                if not state["Running"] or state.get("Health", {}).get("Status") != "healthy":
-                    raise ValueError("Restore Nextcloud health before recovery")
-            service.state.update(active=False, phase="Idle")
-            service.save()
-            print("Recovery acknowledged; quota and copy history preserved")
+            if not snapshot["master"].get("Running") or not service.apps_healthy(snapshot):
+                raise ValueError("Restore Nextcloud health before recovery")
+            service.acknowledge_recovery(automatic=False)
         else:
             service.serve()
 
