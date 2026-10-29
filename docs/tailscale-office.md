@@ -45,6 +45,67 @@ sudo ss -lntp 'sport = :443'
 
 Expect the option to be `true` and no `%tailscale0` suffix on the Serve listener.
 
+## Wait for DNS before Docker starts
+
+Use this when boot logs show `DNS resolver has no external nameservers`, while restarting the affected containers after DNS becomes available fixes Office. `network-online.target` alone does not guarantee MagicDNS readiness. This delays **all Docker containers**, including Forgejo, until the configured hostname resolves through DNS. It does not restart containers on later network interruptions.
+
+Create the readiness script on Debian:
+
+```bash
+sudo tee /usr/local/sbin/wait-for-container-dns >/dev/null <<'EOF'
+#!/bin/sh
+set -eu
+hostname_to_check="$1"
+until grep -q '^nameserver[[:space:]]' /etc/resolv.conf &&
+      timeout 5 getent -s dns ahostsv4 "$hostname_to_check" >/dev/null
+do
+    echo "Waiting for container DNS readiness..."
+    sleep 2
+done
+EOF
+sudo chown root:root /usr/local/sbin/wait-for-container-dns
+sudo chmod 755 /usr/local/sbin/wait-for-container-dns
+```
+
+Replace `NEXTCLOUD_HOSTNAME` below with the actual hostname (no scheme or path). Test first; require exit code zero:
+
+```bash
+sudo timeout 20 /usr/local/sbin/wait-for-container-dns NEXTCLOUD_HOSTNAME
+echo "Exit code: $?"
+```
+
+Then install the drop-in, replacing the same placeholder inside it:
+
+```bash
+sudo mkdir -p /etc/systemd/system/docker.service.d
+sudo tee /etc/systemd/system/docker.service.d/90-dns-readiness.conf >/dev/null <<'EOF'
+[Unit]
+Wants=tailscaled.service
+After=tailscaled.service
+StartLimitIntervalSec=0
+
+[Service]
+ExecStartPre=/usr/bin/timeout 120 /usr/local/sbin/wait-for-container-dns NEXTCLOUD_HOSTNAME
+Restart=on-failure
+RestartSec=30
+EOF
+sudo systemctl daemon-reload
+```
+
+No immediate Docker restart is needed. Each DNS attempt is bounded to two minutes; failed starts retry after 30 seconds without the usual start-rate cutoff. A wrong hostname will prevent Docker from starting: retain console access. This also changes Docker's general failure-restart policy. Test a controlled reboot while no backup is running, inspect `journalctl -b -u docker.service --no-pager`, then repeat the container curl and Office tests below.
+
+Rollback only this startup check:
+
+```bash
+sudo rm /etc/systemd/system/docker.service.d/90-dns-readiness.conf
+sudo systemctl daemon-reload
+# Only if Docker is stopped/failed:
+sudo systemctl reset-failed docker.service
+sudo systemctl start docker.service
+```
+
+Reference: [NetworkManager startup readiness](https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nm-online.html).
+
 ## Validate before accepting
 
 Set the actual Nextcloud hostname, without a scheme or path:
