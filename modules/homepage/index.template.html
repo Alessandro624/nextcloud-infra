@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; base-uri 'none'; form-action 'none'">
+<title>Workspace Home</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 64 64%22%3E%3Crect width=%2264%22 height=%2264%22 rx=%2214%22 fill=%22%23101b22%22/%3E%3Cpath d=%22M14 18h14v14H14zm22 0h14v14H36zM14 40h14v10H14zm22 0h14v10H36z%22 fill=%22%23b6d8c5%22/%3E%3C/svg%3E">
+<style>
+:root{color-scheme:dark;font-family:system-ui,sans-serif;background:#101b22;color:#f2f4ed}
+*{box-sizing:border-box}body{margin:0;min-height:100vh;background:radial-gradient(ellipse at top right,#223c3e,transparent 65%)}
+main{max-width:1080px;margin:auto;padding:56px 28px}header{display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #ffffff24;padding-bottom:24px;font-size:14px;letter-spacing:.08em}
+.brand{font-weight:700}.label{color:#b6d8c5}.intro{padding:80px 0 44px}.eyebrow{color:#b6d8c5;font-size:12px;letter-spacing:.16em;text-transform:uppercase}h1{font-size:clamp(42px,7vw,76px);line-height:1.08;letter-spacing:-.055em;margin:18px 0}p{color:#b6c4cb;line-height:1.7;max-width:580px}
+nav{display:grid;grid-template-columns:1fr 1fr;gap:20px}.card{display:block;text-decoration:none;color:inherit;background:#1c2b33;border:1px solid #ffffff24;border-radius:20px;padding:30px;transition:background .15s,transform .15s}.card:hover{background:#263b44;transform:translateY(-3px)}.card:focus-visible{outline:3px solid #b6d8c5;outline-offset:5px}.number{color:#b6d8c5;font-size:13px}h2{display:flex;align-items:center;gap:14px;font-size:30px;margin:34px 0 8px;letter-spacing:-.03em}.card p{margin:0 0 30px}.action{display:flex;justify-content:space-between;border-top:1px solid #ffffff24;padding-top:20px;font-weight:600}.arrow{font-size:22px}footer{margin-top:48px;color:#96aab4;font-size:13px}
+.service-icon{width:40px;height:40px;flex-shrink:0}.nextcloud{color:#63c4ff}.forgejo{color:#ffad68}
+@media(max-width:600px){main{padding:28px 20px}.intro{padding:52px 0 24px}nav{grid-template-columns:1fr}.card{padding:24px}h2{margin-top:24px}header{font-size:12px}.label{letter-spacing:0}}
+@media(prefers-reduced-motion:reduce){.card{transition:none}.card:hover{transform:none}}
+</style>
+</head>
+<body><main>
+<header><span class="brand">WORKSPACE / HOME</span><span class="label">Private workspace</span></header>
+<section class="intro"><span class="eyebrow">Your team's starting point</span><h1>Everything you<br>work on, together.</h1><p>Open your shared documents or pick up your next project.</p></section>
+<nav aria-label="Workspace services">
+<a class="card" href="{{NEXTCLOUD_URL}}" target="_blank" rel="noopener noreferrer" aria-label="Open Nextcloud in a new tab"><span class="number">01 / FILES &amp; DOCUMENTS</span><h2><svg class="service-icon nextcloud" viewBox="0 0 64 40" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="5"><circle cx="32" cy="20" r="13"/><circle cx="9" cy="20" r="6"/><circle cx="55" cy="20" r="6"/><path d="M15 20h4m26 0h4"/></svg>Nextcloud</h2><p>Share files and edit documents with your team.</p><span class="action">Open Nextcloud <span class="arrow" aria-hidden="true">↗</span></span></a>
+<a class="card" href="{{FORGEJO_URL}}" target="_blank" rel="noopener noreferrer" aria-label="Open Forgejo in a new tab"><span class="number">02 / CODE &amp; PROJECTS</span><h2><img class="service-icon forgejo" alt="" aria-hidden="true" src="data:image/svg+xml;base64,PHN2ZyB2aWV3Qm94PSIwIDAgMjEyIDIxMiIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48c3R5bGUgdHlwZT0idGV4dC9jc3MiPmNpcmNsZXtmaWxsOm5vbmU7c3Ryb2tlOiMwMDA7c3Ryb2tlLXdpZHRoOjE1fXBhdGh7ZmlsbDpub25lO3N0cm9rZTojMDAwO3N0cm9rZS13aWR0aDoyNX0ub3Jhbmdle3N0cm9rZTojZmY2NjAwfS5yZWR7c3Ryb2tlOiNkNDAwMDB9PC9zdHlsZT48ZyB0cmFuc2Zvcm09InRyYW5zbGF0ZSg2LDYpIj48cGF0aCBkPSJNNTggMTY4IHYtOTggYTUwIDUwIDAgMCAxIDUwLTUwIGgyMCIgY2xhc3M9Im9yYW5nZSIvPjxwYXRoIGQ9Ik01OCAxNjggdi0zMCBhNTAgNTAgMCAwIDEgNTAtNTAgaDIwIiBjbGFzcz0icmVkIi8+PGNpcmNsZSBjeD0iMTQyIiBjeT0iMjAiIHI9IjE4IiBjbGFzcz0ib3JhbmdlIi8+PGNpcmNsZSBjeD0iMTQyIiBjeT0iODgiIHI9IjE4IiBjbGFzcz0icmVkIi8+PGNpcmNsZSBjeD0iNTgiIGN5PSIxODAiIHI9IjE4IiBjbGFzcz0icmVkIi8+PC9nPjwvc3ZnPg==">Forgejo</h2><p>Collaborate on repositories, issues and reviews.</p><span class="action">Open Forgejo <span class="arrow" aria-hidden="true">↗</span></span></a>
+</nav><footer>Use your individual account to sign in to each service.</footer>
+</main></body></html>
