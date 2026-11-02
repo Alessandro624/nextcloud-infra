@@ -1,0 +1,22 @@
+[Unit]
+Description=Standalone Forgejo Telegram bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=forgejo-bot
+Group=forgejo-bot
+ExecStart=/usr/bin/python3 -u /opt/forgejo-bot/forgejo_bot.py serve
+Restart=on-failure
+RestartSec=15
+UMask=0077
+StateDirectory=forgejo-bot
+StateDirectoryMode=0700
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+# NoNewPrivileges must not be enabled: the one allowlisted sudo action needs it off.
+
+[Install]
+WantedBy=multi-user.target

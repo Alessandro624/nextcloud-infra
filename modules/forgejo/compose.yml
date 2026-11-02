@@ -1,0 +1,30 @@
+name: forgejo
+services:
+  forgejo:
+    image: ${FORGEJO_IMAGE:?Set the pinned image in .env}
+    user: "1000:1000"
+    restart: unless-stopped
+    init: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    ports:
+      - "127.0.0.1:13000:3000"
+      - "127.0.0.1:12222:2222"
+    volumes:
+      - ./data:/var/lib/gitea
+      - ./config:/etc/gitea
+    environment:
+      GITEA_APP_INI: /etc/gitea/app.ini
+      GITEA_WORK_DIR: /var/lib/gitea
+      GITEA_CUSTOM: /var/lib/gitea/custom
+    networks:
+      - forgejo
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+networks:
+  forgejo: {}

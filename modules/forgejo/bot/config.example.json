@@ -1,0 +1,13 @@
+{
+  "token_file": "/etc/forgejo-bot/token.secret",
+  "user_ids": [],
+  "chat_ids": [],
+  "http_port": 13000,
+  "timezone": "Europe/Rome",
+  "scheduled_time": "03:30",
+  "manual_daily_limit": 1,
+  "manual_weekly_limit": 3,
+  "minimum_interval_hours": 6,
+  "poll_seconds": 300,
+  "backup_enabled": false
+}

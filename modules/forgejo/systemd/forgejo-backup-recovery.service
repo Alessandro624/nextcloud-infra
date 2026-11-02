@@ -1,0 +1,10 @@
+[Unit]
+Description=Resume a pending Forgejo backup after startup
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/forgejo-backup/pending.json
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/systemctl start --no-block forgejo-backup.service

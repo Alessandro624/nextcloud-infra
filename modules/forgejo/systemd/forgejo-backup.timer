@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily Forgejo backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Europe/Rome
+Persistent=true
+Unit=forgejo-backup.service
+
+[Install]
+WantedBy=timers.target

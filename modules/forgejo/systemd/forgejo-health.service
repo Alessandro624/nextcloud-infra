@@ -1,0 +1,10 @@
+[Unit]
+Description=Forgejo service heartbeat
+After=docker.service network-online.target
+
+[Service]
+Type=oneshot
+User=root
+UMask=0077
+ExecStart=/srv/forgejo/scripts/health.sh
+TimeoutStartSec=45

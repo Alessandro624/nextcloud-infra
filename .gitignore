@@ -19,3 +19,12 @@ backups/
 .idea/
 .DS_Store
 Thumbs.db
+modules/**/app.ini
+modules/**/config.json
+modules/**/state.json
+modules/**/pending.json
+modules/**/last-success.json
+modules/**/environment
+modules/homepage/index.html
+*.pcap
+*.pcapng

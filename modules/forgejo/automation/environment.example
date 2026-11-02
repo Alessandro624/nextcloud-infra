@@ -1,0 +1,5 @@
+LOCAL_REPO=/var/backups/forgejo/restic
+REMOTE_REPO=rclone:forgejo-offsite:forgejo-restic
+RESTIC_PASSWORD_FILE=/etc/forgejo-backup/restic.secret
+RCLONE_CONFIG=/etc/forgejo-backup/rclone.conf
+MIN_FREE_GIB=10
