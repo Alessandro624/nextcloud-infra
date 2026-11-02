@@ -2,6 +2,8 @@
 
 Allow only required connections. Apply firewall rules on the target host/VM or gateway: this repository does not install them. Test host and container traffic over both IPv4 and IPv6.
 
+On Debian, start with [network preparation](debian-network-preparation.md), then the [egress worksheet](debian-egress-hardening.md). Optional Forgejo/homepage flows are covered in their module guides. These procedures require host-specific rules and acceptance; the collector does not enforce isolation.
+
 ## Allowed flows
 
 | Source | Destination / purpose | When |
