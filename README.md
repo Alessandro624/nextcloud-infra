@@ -32,6 +32,8 @@ Startup creates `.env` from `.env.example` if missing. Edit it to change ports a
 
 ## Guides
 
+For an optional private workspace with Forgejo, separate Telegram automation and a homepage, follow [modules and installation order](docs/modules.md). Debian/systemd modules are independent of the Windows test setup. Their clean-machine acceptance is a separate deployment step.
+
 - [Setup and testing](docs/setup.md)
 - [Full validation and test cleanup](docs/validation.md)
 - [Backup](docs/backup.md)
